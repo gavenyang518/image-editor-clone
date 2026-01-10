@@ -4,11 +4,11 @@
   "private": true,
   "packageManager": "npm@10.9.2",
   "scripts": {
-    "build": "next build",
+    "build": "NEXT_DISABLE_TURBOPACK=1 next build",
     "build:webpack": "NEXT_DISABLE_TURBOPACK=1 next build",
-    "dev": "next dev",
+    "dev": "NEXT_DISABLE_TURBOPACK=1 next dev",
     "dev:webpack": "NEXT_DISABLE_TURBOPACK=1 next dev --hostname 127.0.0.1 --port 3000",
-    "dev:local": "next dev --hostname 127.0.0.1 --port 3000",
+    "dev:local": "NEXT_DISABLE_TURBOPACK=1 next dev --hostname 127.0.0.1 --port 3000",
     "lint": "eslint .",
     "start": "next start"
   },
