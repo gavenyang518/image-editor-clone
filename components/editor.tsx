@@ -15,6 +15,7 @@ export function Editor() {
   const [prompt, setPrompt] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
   const [results, setResults] = useState<string[]>([])
+  const [generatedAt, setGeneratedAt] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -45,6 +46,12 @@ export function Editor() {
       if (!resp.ok) throw new Error(data?.error || 'Failed to generate')
       if (Array.isArray(data?.images) && data.images.length > 0) {
         setResults(data.images)
+        try {
+          const now = new Date()
+          setGeneratedAt(now.toLocaleTimeString())
+        } catch {
+          setGeneratedAt(null)
+        }
       } else {
         // Fallback: if API returns raw content, we just show a message
         setError('No images returned. Check API response.')
@@ -54,6 +61,40 @@ export function Editor() {
       setError(e?.message || 'Unknown error')
     } finally {
       setIsProcessing(false)
+    }
+  }
+
+  const handleDownload = async (url: string, idx: number) => {
+    try {
+      // Try to infer filename
+      const defaultName = `result-${idx + 1}.png`
+      // If it's a data URL, direct download
+      if (url.startsWith("data:")) {
+        const a = document.createElement("a")
+        a.href = url
+        a.download = defaultName
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        return
+      }
+
+      // Otherwise fetch as blob to avoid cross-origin download issues
+      const res = await fetch(url)
+      const blob = await res.blob()
+      const type = blob.type || "image/png"
+      const ext = type.split("/")[1] || "png"
+      const name = `result-${idx + 1}.${ext}`
+      const objectUrl = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = objectUrl
+      a.download = name
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(objectUrl)
+    } catch (e) {
+      console.error("download failed", e)
     }
   }
 
@@ -151,7 +192,7 @@ export function Editor() {
             <h3 className="text-xl font-semibold mb-4">Output Gallery</h3>
             <p className="text-sm text-muted-foreground mb-6">Your ultra-fast AI creations appear here instantly</p>
 
-            <div className="border-2 border-dashed border-border rounded-lg p-8 min-h-[400px]">
+            <div className="border-2 border-dashed border-border rounded-lg p-4 md:p-6 min-h-[70vh] overflow-auto">
               {isProcessing && (
                 <div className="text-center space-y-4">
                   <div className="text-6xl animate-bounce">🍌</div>
@@ -164,13 +205,46 @@ export function Editor() {
               )}
 
               {!isProcessing && results.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {results.map((url, idx) => (
-                    <div key={idx} className="relative w-full aspect-square overflow-hidden rounded">
-                      {/* Use native img to avoid Next remote domain restrictions */}
-                      <img src={url} alt={`Result ${idx + 1}`} className="w-full h-full object-contain" />
+                <div className="w-full">
+                  {results.length === 1 ? (
+                    <div className="flex flex-col gap-4 w-full">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 font-medium">Result #1</span>
+                        {generatedAt && <span>{generatedAt}</span>}
+                      </div>
+                      <p className="text-sm text-muted-foreground">Generated Image:</p>
+                      <div className="relative w-full h-[60vh] md:h-[65vh] lg:h-[70vh] overflow-hidden rounded border bg-background shadow-sm">
+                        <img src={results[0]} alt="Result 1" className="w-full h-full object-contain" />
+                      </div>
+                      <div className="flex justify-center">
+                        <Button variant="outline" onClick={() => handleDownload(results[0], 0)}>
+                          <Download className="w-4 h-4 mr-2" />
+                          Download Image
+                        </Button>
+                      </div>
                     </div>
-                  ))}
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {results.map((url, idx) => (
+                        <div key={idx} className="flex flex-col gap-3">
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 font-medium">Result #{idx + 1}</span>
+                            {generatedAt && <span>{generatedAt}</span>}
+                          </div>
+                          <p className="text-sm text-muted-foreground">Generated Image:</p>
+                          <div className="relative w-full h-[40vh] md:h-[45vh] overflow-hidden rounded border bg-background shadow-sm">
+                            <img src={url} alt={`Result ${idx + 1}`} className="w-full h-full object-contain" />
+                          </div>
+                          <div className="flex justify-center">
+                            <Button variant="outline" onClick={() => handleDownload(url, idx)}>
+                              <Download className="w-4 h-4 mr-2" />
+                              Download Image
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
