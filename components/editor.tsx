@@ -11,6 +11,7 @@ import Image from "next/image"
 
 export function Editor() {
   const [image, setImage] = useState<string | null>(null)
+  const [imageUrl, setImageUrl] = useState<string>("")
   const [prompt, setPrompt] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
   const [results, setResults] = useState<string[]>([])
@@ -23,13 +24,14 @@ export function Editor() {
       const reader = new FileReader()
       reader.onloadend = () => {
         setImage(reader.result as string)
+        setImageUrl("")
       }
       reader.readAsDataURL(file)
     }
   }
 
   const handleGenerate = async () => {
-    if (!image || !prompt) return
+    if ((!image && !imageUrl) || !prompt) return
     setIsProcessing(true)
     setError(null)
     setResults([])
@@ -37,7 +39,7 @@ export function Editor() {
       const resp = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, imageDataUrl: image }),
+        body: JSON.stringify({ prompt, imageDataUrl: image || undefined, imageUrl: imageUrl || undefined }),
       })
       const data = await resp.json()
       if (!resp.ok) throw new Error(data?.error || 'Failed to generate')
@@ -87,7 +89,7 @@ export function Editor() {
                   ) : (
                     <div className="space-y-2">
                       <Upload className="w-12 h-12 mx-auto text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground">Click to upload image (Max 10MB)</p>
+                      <p className="text-sm text-muted-foreground">Click to upload image (Max 10MB) or paste a public image URL below</p>
                     </div>
                   )}
                 </div>
@@ -97,6 +99,21 @@ export function Editor() {
                   accept="image/*"
                   onChange={handleImageUpload}
                   className="hidden"
+                />
+              </div>
+
+              {/* Optional Image URL */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Or Image URL (optional)</label>
+                <input
+                  type="url"
+                  placeholder="https://example.com/your-image.png"
+                  value={imageUrl}
+                  onChange={(e) => {
+                    setImageUrl(e.target.value)
+                    if (e.target.value) setImage(null)
+                  }}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                 />
               </div>
 
@@ -113,7 +130,7 @@ export function Editor() {
 
               <Button
                 onClick={handleGenerate}
-                disabled={!image || !prompt || isProcessing}
+                disabled={(!image && !imageUrl) || !prompt || isProcessing}
                 className="w-full"
                 size="lg"
               >
@@ -149,9 +166,9 @@ export function Editor() {
               {!isProcessing && results.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {results.map((url, idx) => (
-                    <div key={idx} className="relative w-full aspect-square">
-                      {/* Some providers return base64 data URLs; Next Image honors them */}
-                      <Image src={url} alt={`Result ${idx + 1}`} fill className="object-contain rounded" />
+                    <div key={idx} className="relative w-full aspect-square overflow-hidden rounded">
+                      {/* Use native img to avoid Next remote domain restrictions */}
+                      <img src={url} alt={`Result ${idx + 1}`} className="w-full h-full object-contain" />
                     </div>
                   ))}
                 </div>

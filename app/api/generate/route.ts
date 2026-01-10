@@ -5,7 +5,8 @@ export const runtime = 'nodejs'
 
 type GenerateBody = {
   prompt: string
-  imageDataUrl: string
+  imageDataUrl?: string
+  imageUrl?: string
 }
 
 export async function POST(req: Request) {
@@ -15,8 +16,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing APICORE_API_KEY' }, { status: 500 })
     }
 
-    const { prompt, imageDataUrl } = (await req.json()) as GenerateBody
-    if (!prompt || !imageDataUrl) {
+    const { prompt, imageDataUrl, imageUrl } = (await req.json()) as GenerateBody
+    if (!prompt || (!imageDataUrl && !imageUrl)) {
       return NextResponse.json({ error: 'Missing prompt or image' }, { status: 400 })
     }
 
@@ -29,7 +30,7 @@ export async function POST(req: Request) {
           role: 'user',
           content: [
             { type: 'text', text: prompt },
-            { type: 'image_url', image_url: { url: imageDataUrl } },
+            { type: 'image_url', image_url: { url: imageUrl ?? imageDataUrl } },
           ],
         },
       ],
@@ -63,6 +64,14 @@ export async function POST(req: Request) {
           if (item?.b64_json) images.push(`data:image/png;base64,${item.b64_json}`)
         }
       }
+      // Some providers return a markdown string in content
+      if (typeof content === 'string') {
+        const md = content as string
+        const match = md.match(/!\[[^\]]*\]\(([^)]+)\)/)
+        if (match && match[1]) {
+          images.push(match[1])
+        }
+      }
       // Alternative shapes
       if (data?.data && Array.isArray(data.data)) {
         for (const d of data.data) {
@@ -82,4 +91,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: err?.message ?? 'Unknown error' }, { status: 500 })
   }
 }
-
