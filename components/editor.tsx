@@ -13,6 +13,8 @@ export function Editor() {
   const [image, setImage] = useState<string | null>(null)
   const [prompt, setPrompt] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
+  const [results, setResults] = useState<string[]>([])
+  const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -29,10 +31,28 @@ export function Editor() {
   const handleGenerate = async () => {
     if (!image || !prompt) return
     setIsProcessing(true)
-    // Simulate processing
-    setTimeout(() => {
+    setError(null)
+    setResults([])
+    try {
+      const resp = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, imageDataUrl: image }),
+      })
+      const data = await resp.json()
+      if (!resp.ok) throw new Error(data?.error || 'Failed to generate')
+      if (Array.isArray(data?.images) && data.images.length > 0) {
+        setResults(data.images)
+      } else {
+        // Fallback: if API returns raw content, we just show a message
+        setError('No images returned. Check API response.')
+        console.log('API raw response', data?.raw)
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Unknown error')
+    } finally {
       setIsProcessing(false)
-    }, 2000)
+    }
   }
 
   return (
@@ -114,23 +134,30 @@ export function Editor() {
             <h3 className="text-xl font-semibold mb-4">Output Gallery</h3>
             <p className="text-sm text-muted-foreground mb-6">Your ultra-fast AI creations appear here instantly</p>
 
-            <div className="border-2 border-dashed border-border rounded-lg p-8 min-h-[400px] flex items-center justify-center">
-              {isProcessing ? (
+            <div className="border-2 border-dashed border-border rounded-lg p-8 min-h-[400px]">
+              {isProcessing && (
                 <div className="text-center space-y-4">
                   <div className="text-6xl animate-bounce">🍌</div>
                   <p className="text-muted-foreground">Processing your image...</p>
                 </div>
-              ) : image && prompt ? (
-                <div className="text-center space-y-4">
-                  <div className="relative w-full h-64">
-                    <Image src={image || "/placeholder.svg"} alt="Result" fill className="object-contain rounded" />
-                  </div>
-                  <Button variant="outline">
-                    <Download className="w-4 h-4 mr-2" />
-                    Download Result
-                  </Button>
+              )}
+
+              {!isProcessing && error && (
+                <div className="text-center text-red-600 text-sm">{error}</div>
+              )}
+
+              {!isProcessing && results.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {results.map((url, idx) => (
+                    <div key={idx} className="relative w-full aspect-square">
+                      {/* Some providers return base64 data URLs; Next Image honors them */}
+                      <Image src={url} alt={`Result ${idx + 1}`} fill className="object-contain rounded" />
+                    </div>
+                  ))}
                 </div>
-              ) : (
+              )}
+
+              {!isProcessing && results.length === 0 && !error && (
                 <div className="text-center space-y-2">
                   <div className="text-6xl mb-4">🎨</div>
                   <p className="text-lg font-medium">Ready for instant generation</p>
